@@ -7,13 +7,15 @@ import math
 import copy	#needed to set the centre when creating the cluster
 import os
 
-dim=3
+dim=2
 k=3	#elements of outer border
 q=1	#elements of inner border
 #eMax=100
 #noChangeMax=
 #sigmaQuadMax=
-welt=Set()
+
+#welt=Set()
+welt={}
 
 class punkt:
 	"""defines a point in n-dimensions Euclidian space with features vector and a class"""
@@ -44,8 +46,9 @@ class punkt:
 		return result
 		
 	def __repr__(self):
-		"""prints feaure vector and class"""
+		"""displays feaure vector and class"""
 		return '%r %r' % (self.features, self.klasse)
+		#return '%r' % (self.features, )
 
 	__str__=__repr__
 
@@ -68,21 +71,35 @@ class kluster:
 	#varianz=int(0)
 	#klasse=''
 
-	def __init__(self, punto):
+	def __init__(self, punto=None):
 		self.points=Set()
+		self.IB=Set()
+		self.OB=Set()
+		if punto == None:
+			self.centre=punkt((None, ), None)
+			self.flush()
+			return
 		self.points.add(punto)
 		self.centre=copy.deepcopy(punto)
 		self.varianz=0.0
 		self.klasse=punto.klasse
-		self.IB=Set()
 		self.ib=0
 		self.IB.add(punto)
-		self.OB=Set()
 		self.ob=0
 		self.updOB()
 	
+	def flush(self):
+		self.points.clear()
+		self.varianz=0.0
+		self.klasse=None
+		self.centre=punkt((None, ), None)
+		self.IB.clear()
+		self.ib=0
+		self.OB.clear()
+		self.ob=0
+
 	def __repr__(self):
-		return 'class: %r, len: %r, sigma: %r, centre: %r' % (self.klasse, len(self.points), self.varianz, self.centre.features)
+		return 'len: %r, sigma: %r, centre: %r' % (len(self.points), self.varianz, self.centre.features)
 
 	__str__=__repr__
 
@@ -92,7 +109,7 @@ class kluster:
 		else:
 			return False
 
-	def updCenter(self):
+	def updCentre(self):
 		temp=list()
 		for i in range(dim):
 			temp.append(0)
@@ -112,86 +129,71 @@ class kluster:
 		for f in self.points:
 			relative_distances=list()
 			for s in self.points:
-				#if f == s:
-				#	break
 				t=distance(f, s), s
 				relative_distances.append(t)
-			relative_distances.sort()
-			relative_distances.reverse()
-			#self.IB.update(relative_distances[0:q])
-			for i in range( min(q, len(relative_distances)) ):
-				self.IB.add(relative_distances[i][1])
+			#relative_distances.sort()
+			#relative_distances.reverse()
+			#for i in range( min(q, len(relative_distances)) ):
+			#	self.IB.add(relative_distances[i][1])
+			for i in range(min(q, len(relative_distances))):
+				M=max(relative_distances)
+				relative_distances.remove(M)
+				self.IB.add(M[1])
 		self.ib=math.floor(math.sqrt(len(self.IB))).__int__()
 
 	def updOB(self):
 		self.OB.clear()
-		outer_space=welt.difference(self.points)
-		#print 'len(outer_space):', len(outer_space)
+		#outer_space=welt.difference(self.points)
+		outer_space=welt[self.klasse].difference(self.points)
 		for f in self.points:
 			relative_distances=list()
 			for s in outer_space:
 				t=distance(s, f), s
 				relative_distances.append(t)
-			relative_distances.sort()
-			for i in range( min(k, len(relative_distances)) ):
-				#print relative_distances[i][1]
-				self.OB.add(relative_distances[i][1])
+			#relative_distances.sort()
+			#for i in range( min(k, len(relative_distances)) ):
+			#	self.OB.add(relative_distances[i][1])
+			for i in range(min(k, len(relative_distances))):
+				m=min(relative_distances)
+				relative_distances.remove(m)
+				self.OB.add(m[1])
 		self.ob=math.floor(math.sqrt(len(self.OB))).__int__()
-		#print 'len(OB):', len(self.OB), 'len(points):', len(self.points)
-		#print self.OB
 
 	def add(self, p):
+		if len(self.points) == 0:
+			self.__init__(p)
+			return
 		self.points.add(p)
-		if len(self.points) == 1:
-			self.klasse=copy.deepcopy(p.klasse)
-			self.centre=copy.deepcopy(p)
-			self.varianz=0
-			self.IB.add(p)
-			self.ib=0
-		else:
-			self.updVariance()
-			self.updCenter()
-			self.updIB()
+		self.updCentre()
+		self.updVariance()
+		self.updIB()
+		self.updOB()
+
+	def multiadd(self, other):
+		self.points.update(other.points)
+		self.updCentre()
+		self.updVariance()
+		self.updIB()
 		self.updOB()
 	
 	def rem(self, p):
-		self.points.discard(p)
+		self.points.remove(p)
 		if len(self.points) == 0:
 			self.flush()
 			return
-		self.updCenter()
+		self.updCentre()
 		self.updVariance()
 		self.updIB()
 		self.updOB()
 		return
 
-	def flush(self):
-		self.points.clear()
-		self.varianz=0.0
-		self.klasse=None
-		self.centre.klasse=None
-		temp=list()
-		for i in range(dim):
-			temp.append(None)
-		self.centre.features=tuple(temp[0:dim])
-		self.IB.clear()
-		self.ib=0
-		self.OB.clear()
-		self.ob=0
 
-
-def randomSubset(border, cardinality):		#portare fuori dalla classe ???
-	fr=copy.deepcopy(border)
+def randomSubset(border, cardinality):
+	limit=min(cardinality, len(border))
+	fr=Set(border)
 	Y=Set()
-	#tmp=list()
-	limit=min(cardinality, len(fr))
 	for i in range(limit):
-		Y.add(fr.pop())
-	#for i in range(limit):
-	#	border.add(tmp[i])
-	#	Y.add(tmp[i])
-	#border.update(tmp[0:limit])
-	#Y.update(tmp[0:limit])
+		Y.add(fr.pop())				# il pop non va bene perche' elimina l'elemento e forse non e' proprio random
 	return Y
 
 def furthest(Y, centre):
@@ -199,42 +201,47 @@ def furthest(Y, centre):
 	for p in Y:
 		t=distance(centre, p), p
 		l.append(t)
-	l.sort()
+	l.sort()			# sistemare come in updXB
 	l.reverse()
 	return l[0][1]
 
 def jointVariance(Ca, Cb):
-	Cu=copy.deepcopy(Ca)				#invece di copiare, creare un nuovo kluster ed aggiungere gli oggetti punkt
-	#Cu.points=Cu.points.union(Cb.points)
-	Cu.points.union_update(Cb.points)
-	Cu.updCenter()
+	Cu=kluster()
+	Cu.points.update(Ca.points.union(Cb.points))
+	Cu.updCentre()
 	Cu.updVariance()
 	return Cu.varianz
 
 def gain(Ca, Cb, x):
-	first=copy.deepcopy(Ca)				#vedi nota in j.v.
-	second=copy.deepcopy(Cb)
+	first=kluster()
+	first.points.update(Ca.points)
+	first.updCentre()
+	first.updVariance()
+	second=kluster()
+	second.points.update(Cb.points)
+	second.updCentre()
+	second.updVariance()
 	gab=0
 	gab+=first.varianz
 	gab+=second.varianz
-	first.add(x)
-	second.rem(x)
+	first.points.add(x)
+	first.updCentre()
+	first.updVariance()
+	second.points.remove(x)	#divbyzero
+	if len(second.points) != 0:
+		second.updCentre()		#
+		second.updVariance()
+		gab-=second.varianz
 	gab-=first.varianz
-	gab-=second.varianz
 	return gab
 
 
 def nsc(dim, eMax, noChangeMax, k, q, w, sigmaQuadMax):	# quando esegue sia isolation che union (indipendentemente
-	welt=copy.deepcopy(w)								# da perturbation) quasi sempre abbiamo un cluster con
-	#print 'welt copied'
+	welt=Set(w)											# da perturbation) quasi sempre abbiamo un cluster con
 	prototypes=Set()									# varianza > sigmaQuadMax, verificare.
 	
 	for xi in welt:
-		#print xi
 		prototypes.add(kluster(xi))
-	#print 'base prototypes created!'
-	#for Ci in prototypes:
-	#	print Ci.OB
 	
 	epoch=lastChange=0
 	while (epoch-lastChange < noChangeMax):
@@ -242,19 +249,20 @@ def nsc(dim, eMax, noChangeMax, k, q, w, sigmaQuadMax):	# quando esegue sia isol
 		for Ca in prototypes:
 			if Ca.isVoid():
 				continue
-			if (Ca.varianz > sigmaQuadMax) and (epoch < eMax):        # Isolation #
+			if Ca.varianz > sigmaQuadMax and epoch < eMax:        # Isolation #
 				Y=randomSubset(Ca.IB, Ca.ib)
 				x=furthest(Y, Ca.centre)
-				print 'ISOLATION', epoch, lastChange, Ca.klasse, '->', x.klasse
+				print 'ISOLATION', epoch
 				Ca.rem(x)
 				for Cm in prototypes:
 					if Cm == Ca:
-						continue
+						continue	# ovviamente se ne cerca un altro
 					if Cm.isVoid():
-						Cm.add(x)
-						break		# gestire il caso in cui non trova cluster vuoti (?)
-			elif Ca.varianz <= sigmaQuadMax:		# Union #
-				sMin=os.sys.maxint		# si può utilizzare maxfloat???
+						Cm.add(x)	# gestire il caso in cui non trova cluster vuoti (?)
+						break		# trovato uno vuoto allora e' tutto ok e si termina
+				continue
+			if Ca.varianz <= sigmaQuadMax:		# Union #
+				sMin=os.sys.maxint		# si può utilizzare maxLONG???
 				Cm=None
 				for Cb in prototypes:
 					if (len(Ca.OB.intersection(Cb.points)) != 0) and (Ca != Cb):
@@ -263,18 +271,21 @@ def nsc(dim, eMax, noChangeMax, k, q, w, sigmaQuadMax):	# quando esegue sia isol
 							sMin=jv
 							Cm=Cb
 				if Cm != None:
-					print 'UNION', epoch, lastChange, Ca.klasse, '<-', Cm.klasse
-					for p in Cm.points:		#
-						Ca.add(p)			# forse è meglio aggiungere i punti tutti in una volta con op su insiemi
-					Cm.flush()				# (magari con una points.update() ???)	# vedi todo n° 1
+					print 'UNION', epoch
+					Ca.multiadd(Cm)
+					Cm.flush()
 					lastChange=epoch
-			else:		# Perturbation #
+					continue
+			if True:		# Perturbation #
+				#print 'trying to perturb', epoch
 				Y=randomSubset(Ca.OB, Ca.ob)
-				gMax=-os.sys.maxint-1	# si può utilizzare minfloat???
+				gMax=-os.sys.maxint-1	# si può utilizzare minLONG???
 				Cm=None
 				xMax=None
 				for x in Y:
 					for Cb in prototypes:
+						if Cb == Ca:
+							continue
 						if x in Cb.points:
 							g=gain(Ca, Cb, x)
 							if g > gMax:
@@ -282,7 +293,7 @@ def nsc(dim, eMax, noChangeMax, k, q, w, sigmaQuadMax):	# quando esegue sia isol
 								Cm=Cb
 								xMax=x
 				if gMax > 0:
-					print 'PERTURBATION', epoch, lastChange, Ca.klasse, '<-', Cm.klasse
+					print 'PERTURBATION', epoch, xMax
 					Ca.add(xMax)
 					Cm.rem(xMax)
 					lastChange=epoch
