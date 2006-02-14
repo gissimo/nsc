@@ -1,20 +1,23 @@
+#! /usr/bin/env python -O
 # -*- coding: utf-8 -*-
 """Maximum variance cluster (Cor J. Veenman, Marcel J.T. Reinders) implementation essay"""
 
 from __future__ import division	#needed for int/int -> float
-from sets import Set
-import math
+#from sets import Set
+import math	#sqrt, floor, etc...
 import copy	#needed to set the centre when creating the cluster
-import os
+import os	#needed for maxint
+import string
+import random
+import sys
+import Gnuplot
 
 dim=2
-k=3	#elements of outer border
-q=1	#elements of inner border
-#eMax=100
-#noChangeMax=
-#sigmaQuadMax=
+k=3
+q=1
+eMax=100
+noChangeMax=10
 
-#welt=Set()
 welt={}
 
 class punkt:
@@ -46,9 +49,12 @@ class punkt:
 		return result
 		
 	def __repr__(self):
-		"""displays feaure vector and class"""
-		return '%r %r' % (self.features, self.klasse)
+		#return '%r %r' % (self.features, self.klasse)
 		#return '%r' % (self.features, )
+		representation=self.klasse.__str__()
+		for i in range(dim):
+			representation=string.join((representation, '%.8f' % self.features[i]), sep=' ')	#ProvareAdUsare '\t'.join()
+		return representation
 
 	__str__=__repr__
 
@@ -62,19 +68,19 @@ def distance(first, second):
 
 class kluster:
 	"""a cluster of points of the same class with built-in centre, variance, inner and outer border"""
-	#points=Set()
-	#IB=Set()
-	#ib=0
-	#OB=Set()
-	#ob=0
-	#centre=punkt()
-	#varianz=int(0)
-	#klasse=''
+	#points
+	#IB
+	#ib
+	#OB
+	#ob
+	#centre
+	#varianz
+	#klasse
 
 	def __init__(self, punto=None):
-		self.points=Set()
-		self.IB=Set()
-		self.OB=Set()
+		self.points=set()
+		self.IB=set()
+		self.OB=set()
 		if punto == None:
 			self.centre=punkt((None, ), None)
 			self.flush()
@@ -123,6 +129,8 @@ class kluster:
 		for p in self.points:
 			for i in range(dim):
 				self.varianz+=(p.features[i]-self.centre.features[i])**2
+			#self.varianz/=len(self.points)	############################
+			#print "self.varianz/=len(self.points)"
 
 	def updIB(self):
 		self.IB.clear()
@@ -143,7 +151,6 @@ class kluster:
 
 	def updOB(self):
 		self.OB.clear()
-		#outer_space=welt.difference(self.points)
 		outer_space=welt[self.klasse].difference(self.points)
 		for f in self.points:
 			relative_distances=list()
@@ -190,8 +197,8 @@ class kluster:
 
 def randomSubset(border, cardinality):
 	limit=min(cardinality, len(border))
-	fr=Set(border)
-	Y=Set()
+	fr=set(border)
+	Y=set()
 	for i in range(limit):
 		Y.add(fr.pop())				# il pop non va bene perche' elimina l'elemento e forse non e' proprio random
 	return Y
@@ -227,19 +234,19 @@ def gain(Ca, Cb, x):
 	first.points.add(x)
 	first.updCentre()
 	first.updVariance()
-	second.points.remove(x)	#divbyzero
+	second.points.remove(x)
 	if len(second.points) != 0:
-		second.updCentre()		#
+		second.updCentre()
 		second.updVariance()
 		gab-=second.varianz
 	gab-=first.varianz
 	return gab
 
 
-def nsc(dim, eMax, noChangeMax, k, q, w, sigmaQuadMax):	# quando esegue sia isolation che union (indipendentemente
-	welt=Set(w)											# da perturbation) quasi sempre abbiamo un cluster con
-	prototypes=Set()									# varianza > sigmaQuadMax, verificare.
-	
+#def mvc(dim, eMax, noChangeMax, k, q, w, sigmaQuadMax):
+def mvc(welt, sigmaQuadMax):
+	#welt=set(w)
+	prototypes=set()
 	for xi in welt:
 		prototypes.add(kluster(xi))
 	
@@ -249,7 +256,8 @@ def nsc(dim, eMax, noChangeMax, k, q, w, sigmaQuadMax):	# quando esegue sia isol
 		for Ca in prototypes:
 			if Ca.isVoid():
 				continue
-			if Ca.varianz > sigmaQuadMax and epoch < eMax:        # Isolation #
+			### ISOLATION ###
+			if Ca.varianz > sigmaQuadMax and epoch < eMax:
 				Y=randomSubset(Ca.IB, Ca.ib)
 				x=furthest(Y, Ca.centre)
 				print 'ISOLATION', epoch
@@ -261,7 +269,8 @@ def nsc(dim, eMax, noChangeMax, k, q, w, sigmaQuadMax):	# quando esegue sia isol
 						Cm.add(x)	# gestire il caso in cui non trova cluster vuoti (?)
 						break		# trovato uno vuoto allora e' tutto ok e si termina
 				continue
-			if Ca.varianz <= sigmaQuadMax:		# Union #
+			### UNION ###
+			if Ca.varianz <= sigmaQuadMax:
 				sMin=os.sys.maxint		# si può utilizzare maxLONG???
 				Cm=None
 				for Cb in prototypes:
@@ -276,27 +285,95 @@ def nsc(dim, eMax, noChangeMax, k, q, w, sigmaQuadMax):	# quando esegue sia isol
 					Cm.flush()
 					lastChange=epoch
 					continue
-			if True:		# Perturbation #
-				#print 'trying to perturb', epoch
-				Y=randomSubset(Ca.OB, Ca.ob)
-				gMax=-os.sys.maxint-1	# si può utilizzare minLONG???
-				Cm=None
-				xMax=None
-				for x in Y:
-					for Cb in prototypes:
-						if Cb == Ca:
-							continue
-						if x in Cb.points:
-							g=gain(Ca, Cb, x)
-							if g > gMax:
-								gMax=g
-								Cm=Cb
-								xMax=x
-				if gMax > 0:
-					print 'PERTURBATION', epoch, xMax
-					Ca.add(xMax)
-					Cm.rem(xMax)
-					lastChange=epoch
+			### PERTURBATION ###
+			Y=randomSubset(Ca.OB, Ca.ob)
+			gMax=-os.sys.maxint-1	# si può utilizzare minLONG???
+			Cm=None
+			xMax=None
+			for x in Y:
+				for Cb in prototypes:
+					if Cb == Ca:
+						continue
+					if x in Cb.points:
+						g=gain(Ca, Cb, x)
+						if g > gMax:
+							gMax=g
+							Cm=Cb
+							xMax=x
+			if gMax > 0:
+				print 'PERTURBATION', epoch
+				Ca.add(xMax)
+				Cm.rem(xMax)
+				lastChange=epoch
 	print 'last run at epoch:', epoch
 	return prototypes
+
+
+def test():
+	#for i in range(201):
+	#	punto=punkt( (random.uniform(-100, 100), random.uniform(-100, 100)), i)
+	#	welt.add(punto)
+	
+	# usare argv[2] per decidere se la classe e' la prima o l'ultima colonna del file
+	sfile=file(sys.argv[1])
+	for str in sfile.readlines():
+		l=string.split(str)	### oppure virgola!
+		klasse=l[0]	### oppure l'ultimo!
+		del l[0]	###
+		dim=len(l)
+		for i in range(0, dim):
+			l[i]=string.atof(l[i])
+		if not welt.has_key(klasse):
+			welt.setdefault(klasse, set(()))
+		welt[klasse].add(punkt((l[0:dim]), klasse))
+	sfile.close()
+	
+	#eMax=16
+	#noChangeMax=eMax**(0.5)
+	#k=3
+	#q=1
+	
+	sigmaQuadMax=64
+	
+	prototypes={}
+	for kl in welt.keys():
+		result=mvc(welt[kl], sigmaQuadMax)
+		if not prototypes.has_key(kl):
+			#prototypes.setdefault(kl, list())
+			prototypes.setdefault(kl, set())
+		for pr in result:
+			if not pr.isVoid():
+				#prototypes[kl].append(pr.centre.features)
+				prototypes[kl].add(pr.centre)
+	
+	ofile_name=string.join((sys.argv[1], "mvc.txt"), sep='_')
+	ofile=file(ofile_name, 'w')
+	for kl in prototypes.keys():
+		for point in prototypes[kl]:
+			ofile.write(string.join((point.__str__(), '\n'), sep=''))
+	ofile.close()
+	
+	g=Gnuplot.Gnuplot(debug=0)
+	g.title('MVC applied to %r with sigma^2=%r' % (sys.argv[1], sigmaQuadMax))
+	
+	for kl in prototypes.keys():
+		if len(prototypes[kl]) == 0:
+			continue
+		l=list()
+		for cen in prototypes[kl]:
+			l.append(cen.features)
+		prototypes[kl]=l
+		g.replot(prototypes[kl])
+	for kl in welt.keys():
+		l=list()
+		for p in welt[kl]:
+			l.append(p.features)
+		welt[kl]=l
+		g.replot(Gnuplot.Data(welt[kl], title=kl))
+	
+	graph_file_name=string.join((sys.argv[1], "mvc.ps"), sep='_')
+	g.hardcopy(graph_file_name, color=1)
+
+if __name__ == '__main__':
+	test()
 
