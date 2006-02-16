@@ -1,5 +1,3 @@
-#! /usr/bin/env python -O
-# -*- coding: utf-8 -*-
 """Maximum variance cluster (Cor J. Veenman, Marcel J.T. Reinders) implementation essay"""
 
 from __future__ import division	#needed for int/int -> float
@@ -8,11 +6,8 @@ import math	#sqrt, floor, etc...
 import copy	#needed to set the centre when creating the cluster
 import os	#needed for maxint
 import string
-import random
-import sys
-import Gnuplot
 
-dim=2
+dim=0
 k=3
 q=1
 eMax=100
@@ -53,7 +48,7 @@ class punkt:
 		#return '%r' % (self.features, )
 		representation=self.klasse.__str__()
 		for i in range(dim):
-			representation=string.join((representation, '%.8f' % self.features[i]), sep=' ')	#ProvareAdUsare '\t'.join()
+			representation=string.join((representation, '%.8f' % self.features[i]), sep='\t')
 		return representation
 
 	__str__=__repr__
@@ -130,7 +125,6 @@ class kluster:
 			for i in range(dim):
 				self.varianz+=(p.features[i]-self.centre.features[i])**2
 			#self.varianz/=len(self.points)	############################
-			#print "self.varianz/=len(self.points)"
 
 	def updIB(self):
 		self.IB.clear()
@@ -139,10 +133,6 @@ class kluster:
 			for s in self.points:
 				t=distance(f, s), s
 				relative_distances.append(t)
-			#relative_distances.sort()
-			#relative_distances.reverse()
-			#for i in range( min(q, len(relative_distances)) ):
-			#	self.IB.add(relative_distances[i][1])
 			for i in range(min(q, len(relative_distances))):
 				M=max(relative_distances)
 				relative_distances.remove(M)
@@ -157,9 +147,6 @@ class kluster:
 			for s in outer_space:
 				t=distance(s, f), s
 				relative_distances.append(t)
-			#relative_distances.sort()
-			#for i in range( min(k, len(relative_distances)) ):
-			#	self.OB.add(relative_distances[i][1])
 			for i in range(min(k, len(relative_distances))):
 				m=min(relative_distances)
 				relative_distances.remove(m)
@@ -201,6 +188,7 @@ def randomSubset(border, cardinality):
 	Y=set()
 	for i in range(limit):
 		Y.add(fr.pop())				# il pop non va bene perche' elimina l'elemento e forse non e' proprio random
+
 	return Y
 
 def furthest(Y, centre):
@@ -208,9 +196,7 @@ def furthest(Y, centre):
 	for p in Y:
 		t=distance(centre, p), p
 		l.append(t)
-	l.sort()			# sistemare come in updXB
-	l.reverse()
-	return l[0][1]
+	return max(l)[1]
 
 def jointVariance(Ca, Cb):
 	Cu=kluster()
@@ -243,9 +229,7 @@ def gain(Ca, Cb, x):
 	return gab
 
 
-#def mvc(dim, eMax, noChangeMax, k, q, w, sigmaQuadMax):
 def mvc(welt, sigmaQuadMax):
-	#welt=set(w)
 	prototypes=set()
 	for xi in welt:
 		prototypes.add(kluster(xi))
@@ -260,18 +244,18 @@ def mvc(welt, sigmaQuadMax):
 			if Ca.varianz > sigmaQuadMax and epoch < eMax:
 				Y=randomSubset(Ca.IB, Ca.ib)
 				x=furthest(Y, Ca.centre)
-				print 'ISOLATION', epoch
+				print '%s: ISOLATION, %d' % (Ca.klasse, epoch)
 				Ca.rem(x)
 				for Cm in prototypes:
 					if Cm == Ca:
 						continue	# ovviamente se ne cerca un altro
 					if Cm.isVoid():
-						Cm.add(x)	# gestire il caso in cui non trova cluster vuoti (?)
+						Cm.add(x)
 						break		# trovato uno vuoto allora e' tutto ok e si termina
 				continue
 			### UNION ###
 			if Ca.varianz <= sigmaQuadMax:
-				sMin=os.sys.maxint		# si può utilizzare maxLONG???
+				sMin=os.sys.maxint
 				Cm=None
 				for Cb in prototypes:
 					if (len(Ca.OB.intersection(Cb.points)) != 0) and (Ca != Cb):
@@ -280,14 +264,14 @@ def mvc(welt, sigmaQuadMax):
 							sMin=jv
 							Cm=Cb
 				if Cm != None:
-					print 'UNION', epoch
+					print '%s: UNION, %d' % (Ca.klasse, epoch)
 					Ca.multiadd(Cm)
 					Cm.flush()
 					lastChange=epoch
 					continue
 			### PERTURBATION ###
 			Y=randomSubset(Ca.OB, Ca.ob)
-			gMax=-os.sys.maxint-1	# si può utilizzare minLONG???
+			gMax=-os.sys.maxint-1
 			Cm=None
 			xMax=None
 			for x in Y:
@@ -301,79 +285,10 @@ def mvc(welt, sigmaQuadMax):
 							Cm=Cb
 							xMax=x
 			if gMax > 0:
-				print 'PERTURBATION', epoch
+				print '%s: PERTURBATION, %d' % (Ca.klasse, epoch)
 				Ca.add(xMax)
 				Cm.rem(xMax)
 				lastChange=epoch
-	print 'last run at epoch:', epoch
+	print 'last run at %d' % (epoch)
 	return prototypes
-
-
-def test():
-	#for i in range(201):
-	#	punto=punkt( (random.uniform(-100, 100), random.uniform(-100, 100)), i)
-	#	welt.add(punto)
-	
-	# usare argv[2] per decidere se la classe e' la prima o l'ultima colonna del file
-	sfile=file(sys.argv[1])
-	for str in sfile.readlines():
-		l=string.split(str)	### oppure virgola!
-		klasse=l[0]	### oppure l'ultimo!
-		del l[0]	###
-		dim=len(l)
-		for i in range(0, dim):
-			l[i]=string.atof(l[i])
-		if not welt.has_key(klasse):
-			welt.setdefault(klasse, set(()))
-		welt[klasse].add(punkt((l[0:dim]), klasse))
-	sfile.close()
-	
-	#eMax=16
-	#noChangeMax=eMax**(0.5)
-	#k=3
-	#q=1
-	
-	sigmaQuadMax=64
-	
-	prototypes={}
-	for kl in welt.keys():
-		result=mvc(welt[kl], sigmaQuadMax)
-		if not prototypes.has_key(kl):
-			#prototypes.setdefault(kl, list())
-			prototypes.setdefault(kl, set())
-		for pr in result:
-			if not pr.isVoid():
-				#prototypes[kl].append(pr.centre.features)
-				prototypes[kl].add(pr.centre)
-	
-	ofile_name=string.join((sys.argv[1], "mvc.txt"), sep='_')
-	ofile=file(ofile_name, 'w')
-	for kl in prototypes.keys():
-		for point in prototypes[kl]:
-			ofile.write(string.join((point.__str__(), '\n'), sep=''))
-	ofile.close()
-	
-	g=Gnuplot.Gnuplot(debug=0)
-	g.title('MVC applied to %r with sigma^2=%r' % (sys.argv[1], sigmaQuadMax))
-	
-	for kl in prototypes.keys():
-		if len(prototypes[kl]) == 0:
-			continue
-		l=list()
-		for cen in prototypes[kl]:
-			l.append(cen.features)
-		prototypes[kl]=l
-		g.replot(prototypes[kl])
-	for kl in welt.keys():
-		l=list()
-		for p in welt[kl]:
-			l.append(p.features)
-		welt[kl]=l
-		g.replot(Gnuplot.Data(welt[kl], title=kl))
-	
-	graph_file_name=string.join((sys.argv[1], "mvc.ps"), sep='_')
-	g.hardcopy(graph_file_name, color=1)
-
-if __name__ == '__main__':
-	test()
 
