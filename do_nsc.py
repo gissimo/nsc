@@ -1,9 +1,10 @@
-#! /usr/bin/env python -O
+#!/usr/bin/env python
 
 import os, sys
 import getopt 
 import Gnuplot
 import nsc
+import hdw
 
 klasse_index=0
 separator=None
@@ -17,7 +18,7 @@ unseen_filename=arguments[1][0]
 protos_filename=None
 
 arguments=arguments[0]
-for i in range(len(arguments)):
+for i in xrange(len(arguments)):
 	if arguments[i][0] == '-p':
 		protos_filename=arguments[i][1]
 	elif arguments[i][0] == '--separator':
@@ -28,16 +29,16 @@ for i in range(len(arguments)):
 unseen_set=set()
 protos_set=set()
 
-n=0
 ufile=file(unseen_filename, 'r')
+seq=0
 for line in ufile.readlines():
 	line=line.split(separator)
 	del line[klasse_index]		### needed for testing
 	nsc.dim=len(line)
-	unseen_set.add(nsc.punkt([float(i) for i in line], None))	## se alcuni punti hanno le stesse coordinate, non li inserisce piu' volte
-	n+=1
+	unseen_set.add(nsc.punkt([float(i) for i in line], None))	## se alcuni punti hanno le stesse coordinate, non li inserisce piu' volte, ma ad ogni modo dopo che nsc li classifica non tiene piu' punti con le stesse coordinate e la stessa classe, ma solo uno
+	seq+=1
 ufile.close
-print n, len(unseen_set)
+print len(unseen_set)
 
 pfile=file(protos_filename, 'r')
 for line in pfile.readlines():
@@ -53,8 +54,9 @@ klassified=nsc.nsc(protos_set, unseen_set)
 ofile_name='-'.join((os.path.splitext(unseen_filename)[0], "nsc.txt"))
 ofile=file(ofile_name, 'w')
 for kl in klassified.keys():
+	print kl, len(klassified[kl])
 	for point in klassified[kl]:
-		ofile.write(''.join((point.__str__(), '\n')))
+		ofile.write(''.join(('%s' % point, '\n')))
 ofile.close()
 
 

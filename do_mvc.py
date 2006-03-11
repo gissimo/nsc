@@ -1,15 +1,15 @@
-#! /usr/bin/env python -O
+#!/usr/bin/env python
 
 import os, sys
 import getopt
 import Gnuplot
 import nsc
+import hdw
 
 sigmaQuadMax=128
 klasse_index=0
 separator=None
 
-nsc.eMax=20
 
 def usage():
 	print '\nusage: %s filename [-s variance costraint], [--separator char], [--classid 0|-1]\n' % (sys.argv[0].split(os.sep)[-1])
@@ -18,10 +18,10 @@ if len(sys.argv) == 1:
 	usage()
 	sys.exit()
 
-arguments=getopt.gnu_getopt(sys.argv[1:], 's:', ['separator=','classid='])	# vedere file:///opt/local/Library/Frameworks/Python.framework/Versions/2.4/bin/smtpd.py
+arguments=getopt.gnu_getopt(sys.argv[1:], 's:', ['separator=','classid='])
 ifile_name=arguments[1][0]
 arguments=arguments[0]
-for i in range(len(arguments)):
+for i in xrange(len(arguments)):
 	if arguments[i][0] == '-s':
 		sigmaQuadMax=float(arguments[i][1])
 	elif arguments[i][0] == '--separator':
@@ -41,8 +41,11 @@ for line in sfile.readlines():
 	nsc.welt[klasse].add(nsc.punkt([float(i) for i in line], klasse))
 sfile.close()
 
+#nsc.computeRLs()
+
 prototypes={}
 for kl in nsc.welt.keys():
+	nsc.computeRLs(nsc.welt[kl])
 	result=nsc.mvc(nsc.welt[kl], sigmaQuadMax)
 	if not prototypes.has_key(kl):
 		prototypes.setdefault(kl, set())
@@ -50,11 +53,11 @@ for kl in nsc.welt.keys():
 		if not pr.isVoid():
 			prototypes[kl].add(pr.mean)
 
-ofile_name='-'.join((os.path.splitext(ifile_name)[0], "mvc.txt"))
+ofile_name='-'.join((os.path.splitext(ifile_name)[0], "mvc.txt"))	#usare format strings piuttosto
 ofile=file(ofile_name, 'w')
 for kl in prototypes.keys():
 	for point in prototypes[kl]:
-		ofile.write(''.join((point.__str__(), '\n')))
+		ofile.write(''.join(('%s' % point, '\n')))
 ofile.close()
 
 
