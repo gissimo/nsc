@@ -1,5 +1,6 @@
 """hard and dirty work for NSC implementation"""
 
+
 import os, sys
 import getopt
 import Gnuplot
@@ -34,55 +35,80 @@ def abstract_file(ifile_name, separator, klasse_index=None):
 	if len(intelligible) == 0:
 		print '\nno values can be read from %s!\n' % (ifile_name)
 		sys.exit()
-	return intelligible, dim
+	nsc.dim=dim
+	return frozenset(intelligible)
 
 
-def fill_world(universe, welt):
-	"""fills the welt dictionary with the points from the set universe"""
-	for p in universe:
-		if not welt.has_key(p.klasse):
-			welt.setdefault(p.klasse, set())
-		welt[p.klasse].add(p)
+def fill_world(sample):
+	"""fills the nsc.welt dictionary with the points from the set sample"""
+	for p in sample:
+		if not nsc.welt.has_key(p.klasse):
+			nsc.welt.setdefault(p.klasse, set())
+		nsc.welt[p.klasse].add(p)
 
 
-def random_samples(to_sample, n):
-	"""computes a list of n random subsets of to_sample"""
-	#n=math.floor(math.sqrt(len(to_sample))).__int__()
-	#n=10
-	step=len(to_sample)/n
-	lamb=list(to_sample)
-	random.SystemRandom.shuffle(random.SystemRandom(os.urandom(4)), lamb)
-	#lamb.reverse()
-	#random.shuffle(lamb)
-	testing_sets=list()
-	for i in xrange(n-1):
-		testing_sets.insert(i, set())
-		testing_sets[i].update(lamb[i:i+step])
-	testing_sets.append(set(lamb[step*(n-1):]))
-	return testing_sets
+#def random_samples(to_sample, n):
+#	"""computes a list of n random subsets of to_sample"""
+#	#n=math.floor(math.sqrt(len(to_sample))).__int__()
+#	#n=10
+#	step=len(to_sample)/n
+#	#print len(to_sample)
+#	lamb=list(to_sample)
+#	#print len(lamb)
+#	#random.SystemRandom.shuffle(random.SystemRandom(os.urandom(4)), lamb)
+#	lamb.reverse()
+#	#print 'lamb', len(lamb)
+#	#random.shuffle(lamb)
+#	testing_sets=[None]*n
+#	for i in xrange(n-1):
+#		#testing_sets.insert(i, set())
+#		#testing_sets[i].update(lamb[i:i+step])
+#		testing_sets[i]=frozenset(lamb[i:i+step])
+#	testing_sets[n-1]=frozenset(lamb[(n-1)*step:])
+#	return testing_sets
 
 
 #def random_samples(to_sample, n):
 #	"""computes a list of n random subsets of to_sample"""
 #	dimension=len(to_sample)/n
-#	testing_sets=list()
+#	testing_sets=[None]*n
 #	lamb=set(to_sample)
 #	for i in xrange(n-1):
 #		#print dimension
-#		#temp=set(random.sample(lamb, dimension))
-#		temp=set(random.SystemRandom.sample(random.SystemRandom(os.urandom(4)), lamb, dimension))
+#		temp=frozenset(random.sample(lamb, dimension))
+#		#temp=set(random.SystemRandom.sample(random.SystemRandom(os.urandom(4)), lamb, dimension))
 #		#print len(temp)
-#		testing_sets.append(temp)
+#		testing_sets[i]=temp
 #		#lamb.difference_update(temp)
 #		lamb=lamb-temp
 #		#print len(lamb)
-#	testing_sets.append(set(lamb))
+#	testing_sets[n-1]=frozenset(lamb)
 #	return testing_sets
 
 
-#def leave_one_out(to_sample, n):
-#	#temp=random.sample(to_sample, n)
-#	temp=random.Systemrandom.sample(random.SystemRandom(os.urandom(100)), to_sample, n)
+def random_samples(to_sample, n):
+	"""computes a list of n random subsets of to_sample"""
+	testing_sets=[None]*n
+	td={}
+	for p in to_sample:
+		if not td.has_key(p.klasse):
+			td.setdefault(p.klasse, list([set(), None]))
+		td[p.klasse][0].add(p)
+	
+	for k in td.keys():
+		td[k][1]=len(td[k][0])/n
+		#print 'rsk', len(td[k][0]), td[k][1], k
+	
+	for i in xrange(n-1):
+		testing_sets[i]=set()
+		for k in td.keys():
+			rsk=random.sample(td[k][0], td[k][1])
+			testing_sets[i].update(rsk)
+			td[k][0].difference_update(rsk)
+	testing_sets[n-1]=set()
+	for k in td.keys():
+		testing_sets[n-1].update(td[k][0])
+	return testing_sets
 
 
 def handle_commands(argv, short, long):
@@ -156,9 +182,21 @@ def usage(argv0, short):
 	print '\nusage: %s filename %s%s%s[--separator char] [--classid 0|-1]' % (argv0.split(os.sep)[-1], s, p, d)
 
 
-def avg(array):
-	return float(sum(array))/len(array)
+def statistics(array):
+	total=0
+	sqsum=0
+	lower=100
+	higher=0
+	n=len(array)
+	for i in array:
+		total+=i
+		sqsum+=i**2
+		lower=min(lower, i)
+		higher=max(higher, i)
+	avg=total.__float__()/n
+	stddev=math.sqrt(sqsum.__float__()/n - avg**2)
+	return lower, avg, higher, stddev
 
 
 #gestire visualizzazione con gnuplot
-#usare eccezioni se non si trova gnuplot
+#usare eccezioni se non si puo' importare gnuplot

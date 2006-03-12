@@ -4,6 +4,7 @@ import math	#sqrt, floor, etc...
 import os	#needed for maxint
 import random
 
+
 dim=0
 k=3
 q=1
@@ -14,6 +15,7 @@ welt={}
 ### keys are klasses, values a set of punkts of that klasse
 rank_list={}
 ### keys are punkts, values the rank list for that punkt
+
 
 class punkt:
 	"""defines a point in n-dimensions Euclidian space, contains:
@@ -173,6 +175,7 @@ def randomSubset(border, cardinality):
 		Y.add(X.pop())
 	return Y
 	#return set(random.SystemRandom.sample(random.SystemRandom(os.urandom(4)), border, cardinality))
+	#return set(random.sample(border, cardinality))
 
 def furthest(Y, mean):
 	"""the punkt of Y that is furthest from mean"""
@@ -215,12 +218,12 @@ def gain(Ca, Cb, x):
 	return gab
 
 
-def computeRLs(welt_kl):
-	"""computes rank lists for each point in welt_kl"""
-	for star in welt_kl:
+def computeRLs(kl):
+	"""computes rank lists for each point in welt[kl]"""
+	for star in welt[kl]:
 		if not rank_list.has_key(star):
 			rank_list.setdefault(star, list())
-		for figurant in welt_kl:
+		for figurant in welt[kl]:
 			if figurant == star:
 				continue
 			rank_list[star].append((distance(star, figurant), figurant))
@@ -230,10 +233,10 @@ def computeRLs(welt_kl):
 		rank_list[star].sort()
 
 
-def mvc(welt_kl, sigmaQuadMax):
+def mvc(kl, sigmaQuadMax):
 	"""Maximum variance cluster"""
 	prototypes=set()
-	for xi in welt_kl:
+	for xi in welt[kl]:
 		prototypes.add(kluster(xi))
 
 	epoch=lastChange=0
@@ -297,15 +300,11 @@ def mvc(welt_kl, sigmaQuadMax):
 
 def nsc(prototypes, unclassified):
 	"""Nearest subclass classifier"""
-	classified={}
+	classified=set()
 	for p in unclassified:
 		relative_distances=list()
 		for proto in prototypes:
-			t=distance(p, proto), proto.klasse
-			relative_distances.append(t)
-		p.klasse=min(relative_distances)[1]	#ValueError: min() arg is an empty sequence
-		if not classified.has_key(p.klasse):
-			classified.setdefault(p.klasse, set())
-		classified[p.klasse].add(p)
+			relative_distances.append((distance(p, proto), proto.klasse))
+		p.klasse=min(relative_distances)[1]
+		classified.add(p)
 	return classified
-
