@@ -1,67 +1,66 @@
 #! /usr/bin/env python -O
 
-#from sets import Set
-import os
-import string
-#import random
-import sys
+import os, sys
+import getopt
 import Gnuplot
-import mvc
-
-#for i in range(201):
-#	punto=mvc.punkt( (random.uniform(-100, 100), random.uniform(-100, 100)), i)
-#	mvc.welt.add(punto)
-
-argc=len(sys.argv)
+import nsc
 
 sigmaQuadMax=128
-if argc > 2:
-	sigmaQuadMax=string.atof(sys.argv[2])
-
-klass_index=0
-if argc > 3:
-	klass_index=string.atoi(sys.argv[3])
-
+klasse_index=0
 separator=None
-if argc >= 4:
-	separator=sys.argv[4]
 
-sfile=file(sys.argv[1], 'r')
-for str in sfile.readlines():
-	l=string.split(str, sep=separator)
-	klasse=string.strip(l[klass_index])
-	#del l[0]
-	del l[klass_index]
-	mvc.dim=len(l)
-	for i in range(mvc.dim):
-		l[i]=string.atof(l[i])
-	if not mvc.welt.has_key(klasse):
-		mvc.welt.setdefault(klasse, set(()))
-	mvc.welt[klasse].add(mvc.punkt((l[0:mvc.dim]), klasse))
+nsc.eMax=20
+
+def usage():
+	print '\nusage: %s filename [-s variance costraint], [--separator char], [--classid 0|-1]\n' % (sys.argv[0].split(os.sep)[-1])
+
+if len(sys.argv) == 1:
+	usage()
+	sys.exit()
+
+arguments=getopt.gnu_getopt(sys.argv[1:], 's:', ['separator=','classid='])	# vedere file:///opt/local/Library/Frameworks/Python.framework/Versions/2.4/bin/smtpd.py
+ifile_name=arguments[1][0]
+arguments=arguments[0]
+for i in range(len(arguments)):
+	if arguments[i][0] == '-s':
+		sigmaQuadMax=float(arguments[i][1])
+	elif arguments[i][0] == '--separator':
+		separator=arguments[i][1]
+	elif arguments[i][0] == '--classid':
+		klasse_index=int(arguments[i][1])
+
+sfile=file(ifile_name, 'r')
+for line in sfile.readlines():
+	line=line.split(separator)
+	klasse=line[klasse_index].strip()
+	#del l[0]		# in the case that some other elements are useless
+	del line[klasse_index]
+	nsc.dim=len(line)
+	if not nsc.welt.has_key(klasse):
+		nsc.welt.setdefault(klasse, set())
+	nsc.welt[klasse].add(nsc.punkt([float(i) for i in line], klasse))
 sfile.close()
 
 prototypes={}
-for kl in mvc.welt.keys():
-	result=mvc.mvc(mvc.welt[kl], sigmaQuadMax)
+for kl in nsc.welt.keys():
+	result=nsc.mvc(nsc.welt[kl], sigmaQuadMax)
 	if not prototypes.has_key(kl):
 		prototypes.setdefault(kl, set())
 	for pr in result:
 		if not pr.isVoid():
-			prototypes[kl].add(pr.centre)
+			prototypes[kl].add(pr.mean)
 
-ofile_name=string.join((sys.argv[1], "mvc.txt"), sep='_')
+ofile_name='-'.join((os.path.splitext(ifile_name)[0], "mvc.txt"))
 ofile=file(ofile_name, 'w')
 for kl in prototypes.keys():
 	for point in prototypes[kl]:
-		ofile.write(string.join((point.__str__(), '\n'), sep=''))
+		ofile.write(''.join((point.__str__(), '\n')))
 ofile.close()
 
 
-raw_input('press enter to view plot...\n')
-
-title=string.rsplit(sys.argv[1], sep=os.sep)[-1]
+#raw_input('press enter to view plot...\n')
 g=Gnuplot.Gnuplot(debug=0)
-g.title('MVC applied to %r with sigma^2=%.4f' % (title, sigmaQuadMax))
+g.title('MVC applied to %r with sigma^2=%.4f' % (ifile_name.split(os.sep)[-1], sigmaQuadMax))
 #g.xlabel('')
 #g.ylabel('')
 
@@ -73,14 +72,14 @@ for kl in prototypes.keys():
 		l.append(cen.features)
 	prototypes[kl]=l
 	g.replot(Gnuplot.Data(prototypes[kl], title='**%s**' % (kl), cols=(0,1)))
-for kl in mvc.welt.keys():
+for kl in nsc.welt.keys():
 	l=list()
-	for p in mvc.welt[kl]:
+	for p in nsc.welt[kl]:
 		l.append(p.features)
-	mvc.welt[kl]=l
-	g.replot(Gnuplot.Data(mvc.welt[kl], title=kl, cols=(0,1)))
+	nsc.welt[kl]=l
+	g.replot(Gnuplot.Data(nsc.welt[kl], title=kl, cols=(0,1)))
 
-graph_file_name=string.join((sys.argv[1], "mvc.ps"), sep='_')
-raw_input('press enter to write plot %r\n' % (graph_file_name))
+graph_file_name='-'.join((os.path.splitext(ifile_name)[0], "mvc.ps"))
+#raw_input('press enter to write plot %r\n' % (graph_file_name))
 g.hardcopy(graph_file_name, color=1)
 
