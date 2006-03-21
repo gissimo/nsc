@@ -1,89 +1,66 @@
 #!/usr/bin/env python
 
 import os, sys
-import getopt 
-import Gnuplot
 import nsc
 import hdw
+if sys.version_info[0:2] < (2, 4):
+	from sets import Set as set, ImmutableSet as frozenset
 
-klasse_index=0
-separator=None
 
-if len(sys.argv) == 1:
-	print '\nusage: %s filename [-p prototypes file], [--separator char]\n' % (sys.argv[0])
-	sys.exit()
+ufile_name, dummy, pfile_name, dummy, separator, klasse_index=hdw.handle_commands(sys.argv, 'p:', ['separator=', 'classid='])
+del dummy
 
-arguments=getopt.gnu_getopt(sys.argv[1:], 'p:', ('separator=', 'classid='))
-unseen_filename=arguments[1][0]
-protos_filename=None
+unseen_set=hdw.abstract_file(ufile_name, separator)
 
-arguments=arguments[0]
-for i in xrange(len(arguments)):
-	if arguments[i][0] == '-p':
-		protos_filename=arguments[i][1]
-	elif arguments[i][0] == '--separator':
-		separator=arguments[i][1]
-	elif arguments[i][0] == '--classid':
-		klasse_index=int(arguments[i][1])
-
-unseen_set=set()
-protos_set=set()
-
-ufile=file(unseen_filename, 'r')
-seq=0
-for line in ufile.readlines():
-	line=line.split(separator)
-	del line[klasse_index]		### needed for testing
-	nsc.dim=len(line)
-	unseen_set.add(nsc.punkt([float(i) for i in line], None))	## se alcuni punti hanno le stesse coordinate, non li inserisce piu' volte, ma ad ogni modo dopo che nsc li classifica non tiene piu' punti con le stesse coordinate e la stessa classe, ma solo uno
-	seq+=1
-ufile.close
-print len(unseen_set)
-
-pfile=file(protos_filename, 'r')
-for line in pfile.readlines():
-	line=line.split()
-	klasse=line[0].strip()
-	del line[0]
-	protos_set.add(nsc.punkt([float(i) for i in line], klasse))
-pfile.close
-print len(protos_set)
+protos_set=hdw.abstract_file(pfile_name, None, 0)
 
 klassified=nsc.nsc(protos_set, unseen_set)
 
-ofile_name='-'.join((os.path.splitext(unseen_filename)[0], "nsc.txt"))
+
+ofile_name='%s-nsc.txt' % (os.path.splitext(ufile_name)[0])
 ofile=file(ofile_name, 'w')
-for kl in klassified.keys():
-	print kl, len(klassified[kl])
-	for point in klassified[kl]:
-		ofile.write(''.join(('%s' % point, '\n')))
+ofile.write('# NSC applied to %r with prototypes from %r #\n' % (ufile_name.split(os.sep)[-1], pfile_name.split(os.sep)[-1]))
+for point in klassified:
+	ofile.write('%s\n' % (point))
 ofile.close()
 
+try:
+	import Gnuplot
+except ImportError:
+	print '\nCANNOT FIND GNUPLOT-PYTHON MODULE\n'
+	sys.exit()
+#Gnuplot.GnuplotOpts.default_term='unknown'		### touch this if you encounter
+												### problems
+f, s=hdw.rnd_dim(nsc.dim) ### two random numbers between 0 and nsc.dim-1
 
-#raw_input('press enter to view plot...\n')
 g=Gnuplot.Gnuplot(debug=0)
-g.title('NSC applied to %r with prototypes from %r' % (unseen_filename.split(os.sep)[-1], protos_filename.split(os.sep)[-1]))
-#g.xlabel('')
-#g.ylabel('')
+g.title('NSC applied to %r with prototypes from %r' % (ufile_name.split(os.sep)[-1], pfile_name.split(os.sep)[-1]))
+if (f, s) != (0, 1):
+	g.xlabel('feature space reduced to %dx%d' % (f+1, s+1))
+#g.xlabel('plan %d' % (f+1))
+#g.ylabel('plan %d' % (s+1))
 
-protos_dict={}
-for p in protos_set:
-	if not protos_dict.has_key(p.klasse):
-		protos_dict.setdefault(p.klasse, list())
-	protos_dict[p.klasse].append(p.features)
+#protos_dict={}
+#for p in protos_set:
+#	if not protos_dict.has_key(p.klasse):
+#		protos_dict.setdefault(p.klasse, list())
+#	protos_dict[p.klasse].append(p.features)
 
-for kl in klassified.keys():
-	l=list()
-	for p in klassified[kl]:
-		l.append(p.features)
-	klassified[kl]=l
-	g.replot(Gnuplot.Data(klassified[kl], title=kl, cols=(0,1)))
+klassified_dict={}
+for p in klassified:
+	if not klassified_dict.has_key(p.klasse):
+		klassified_dict.setdefault(p.klasse, list())
+	klassified_dict[p.klasse].append(p.features)
 
-graph_file_name='-'.join((os.path.splitext(unseen_filename)[0], "nsc.ps"))
+tmp=klassified_dict.keys()
+tmp.sort()
+for kl in tmp:
+	g.replot(Gnuplot.Data(klassified_dict[kl], title=kl, cols=(f,s)))
 
-for kl in protos_dict.keys():
-	g.replot(Gnuplot.Data(protos_dict[kl], title='**%s**' % (kl), cols=(0,1)))
+#tmp=protos_dict.keys()
+#tmp.sort()
+#for kl in tmp:
+#	g.replot(Gnuplot.Data(protos_dict[kl], title='** %s **' % (kl), cols=(f,s)))
 
-#raw_input('press enter to write plot %r\n' % (graph_file_name))
-g.hardcopy(graph_file_name, color=1)
-
+gfile_name='%s-nsc.ps' % (os.path.splitext(ufile_name)[0])
+g.hardcopy(gfile_name, color=1)

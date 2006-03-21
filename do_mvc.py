@@ -1,88 +1,70 @@
 #!/usr/bin/env python
 
 import os, sys
-import getopt
-import Gnuplot
 import nsc
 import hdw
-
-sigmaQuadMax=128
-klasse_index=0
-separator=None
+if sys.version_info[0:2] < (2, 4):
+	from sets import Set as set, ImmutableSet as frozenset
 
 
-def usage():
-	print '\nusage: %s filename [-s variance costraint], [--separator char], [--classid 0|-1]\n' % (sys.argv[0].split(os.sep)[-1])
+ifile_name, sigma, dummy, dummy, separator, klasse_index=hdw.handle_commands(sys.argv, 's:', ['separator=', 'classid='])
+del dummy
 
-if len(sys.argv) == 1:
-	usage()
-	sys.exit()
-
-arguments=getopt.gnu_getopt(sys.argv[1:], 's:', ['separator=','classid='])
-ifile_name=arguments[1][0]
-arguments=arguments[0]
-for i in xrange(len(arguments)):
-	if arguments[i][0] == '-s':
-		sigmaQuadMax=float(arguments[i][1])
-	elif arguments[i][0] == '--separator':
-		separator=arguments[i][1]
-	elif arguments[i][0] == '--classid':
-		klasse_index=int(arguments[i][1])
-
-sfile=file(ifile_name, 'r')
-for line in sfile.readlines():
-	line=line.split(separator)
-	klasse=line[klasse_index].strip()
-	#del l[0]		# in the case that some other elements are useless
-	del line[klasse_index]
-	nsc.dim=len(line)
-	if not nsc.welt.has_key(klasse):
-		nsc.welt.setdefault(klasse, set())
-	nsc.welt[klasse].add(nsc.punkt([float(i) for i in line], klasse))
-sfile.close()
-
-#nsc.computeRLs()
+universe=hdw.abstract_file(ifile_name, separator, klasse_index)
+hdw.fill_world(universe)
 
 prototypes={}
-for kl in nsc.welt.keys():
-	nsc.computeRLs(nsc.welt[kl])
-	result=nsc.mvc(nsc.welt[kl], sigmaQuadMax)
-	if not prototypes.has_key(kl):
-		prototypes.setdefault(kl, set())
-	for pr in result:
+for kl in nsc.welt.keys():	### presupervised way, remember?
+	nsc.computeRLs(kl)
+	for pr in nsc.mvc(kl, sigma):
+		if not prototypes.has_key(kl):
+			prototypes.setdefault(kl, set())
 		if not pr.isVoid():
 			prototypes[kl].add(pr.mean)
 
-ofile_name='-'.join((os.path.splitext(ifile_name)[0], "mvc.txt"))	#usare format strings piuttosto
+ofile_name='%s-mvc-%.4f.txt' % (os.path.splitext(ifile_name)[0], sigma)
 ofile=file(ofile_name, 'w')
+ofile.write('# MVC applied to %r with sigma^2=%.4f #\n' % (ifile_name.split(os.sep)[-1], sigma))
 for kl in prototypes.keys():
 	for point in prototypes[kl]:
-		ofile.write(''.join(('%s' % point, '\n')))
+		ofile.write('%s\n' % (point))
 ofile.close()
 
+try:
+	import Gnuplot
+except ImportError:
+	print '\nCANNOT FIND GNUPLOT-PYTHON MODULE\n'
+	sys.exit()
+#Gnuplot.GnuplotOpts.default_term='unknown'		### touch this if you encounter
+												### problems
+f, s=hdw.rnd_dim(nsc.dim) ### two random numbers between 0 and nsc.dim-1
 
-#raw_input('press enter to view plot...\n')
 g=Gnuplot.Gnuplot(debug=0)
-g.title('MVC applied to %r with sigma^2=%.4f' % (ifile_name.split(os.sep)[-1], sigmaQuadMax))
-#g.xlabel('')
-#g.ylabel('')
+g.title('MVC applied to %r with sigma^2=%.4f' % (ifile_name.split(os.sep)[-1], sigma))
+if (f, s) != (0, 1):
+	g.xlabel('feature space reduced to %dx%d' % (f+1, s+1))
+#g.xlabel('plan %d' % (f+1))
+#g.ylabel('plan %d' % (s+1))
 
-for kl in prototypes.keys():
+tmp=prototypes.keys()
+tmp.sort()
+for kl in tmp:
 	if len(prototypes[kl]) == 0:
 		continue
 	l=list()
 	for cen in prototypes[kl]:
 		l.append(cen.features)
 	prototypes[kl]=l
-	g.replot(Gnuplot.Data(prototypes[kl], title='**%s**' % (kl), cols=(0,1)))
-for kl in nsc.welt.keys():
+	g.replot(Gnuplot.Data(prototypes[kl], title='** %s **' % (kl), cols=(f,s)))
+
+tmp=nsc.welt.keys()
+tmp.sort()
+for kl in tmp:
 	l=list()
 	for p in nsc.welt[kl]:
 		l.append(p.features)
 	nsc.welt[kl]=l
-	g.replot(Gnuplot.Data(nsc.welt[kl], title=kl, cols=(0,1)))
+	g.replot(Gnuplot.Data(nsc.welt[kl], title=kl, cols=(f,s)))
 
-graph_file_name='-'.join((os.path.splitext(ifile_name)[0], "mvc.ps"))
-#raw_input('press enter to write plot %r\n' % (graph_file_name))
-g.hardcopy(graph_file_name, color=1)
-
+gfile_name='%s-mvc-%.4f.ps' % (os.path.splitext(ifile_name)[0], sigma)
+g.hardcopy(gfile_name, color=1)
